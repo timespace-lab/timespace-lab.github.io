@@ -78,7 +78,7 @@ function panToFocus() {
   let ll = p ? [p.lat, p.lon] : null;
   if (!ll && S.selEvent) { const e = evById(S.selEvent); if (e && e.place) ll = [e.place.lat, e.place.lon]; }
   if (!ll) return;
-  if (MV.mode === 'leaflet') { if (!MV.map.getBounds().pad(-0.1).contains(ll)) MV.map.panTo(ll); }
+  panIfHidden(ll[0], ll[1]);
 }
 function addRoutePin(id) {
   const r = S.draftRoute; if (!r) return;
@@ -255,7 +255,7 @@ const ACT = {
   fit: () => { fitToContent(true); return 'norender'; },
   'zoom-in': () => { zoomBy(1); return 'norender'; },
   'zoom-out': () => { zoomBy(-1); return 'norender'; },
-  'axis-toggle': () => { S.axisOpen = !S.axisOpen; setTimeout(() => MV.map && MV.map.invalidateSize(), 50); },
+  'axis-toggle': () => { S.axisOpen = !S.axisOpen; setTimeout(mvResize, 50); },
   // 검색
   'search-clear': () => { S.search = { q: '', status: 'idle', results: [], note: '' }; },
   'search-pick': id => {
@@ -466,7 +466,7 @@ document.addEventListener('keydown', ev => {
     render(); return;
   }
   if ((S.route !== 'map' && S.route !== 'timeline') || S.dialog || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
-  if (ev.target.closest('.leaflet-container')) return;
+  if (ev.target.closest('.maplibregl-map')) return;
   const evs = sorted(); if (!evs.length) return; const dir = ev.key === 'ArrowRight' ? 1 : -1;
   if (S.play != null) S.play = clamp(S.play + dir, 0, evs.length - 1);
   else if (S.review) S.review.idx = clamp(S.review.idx + dir, 0, evs.length - 1);
@@ -474,7 +474,7 @@ document.addEventListener('keydown', ev => {
   else return;
   ev.preventDefault(); render({ reveal: true }); setTimeout(panToFocus, 30);
 });
-let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { drawMaps(); if (S.route === 'map') { if (MV.map) MV.map.invalidateSize(); else drawAtlas(); } if (S.route === 'timeline' && tlL().design === 'cards') drawRelsB(); }, 140); });
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { drawMaps(); if (S.route === 'map') mvResize(); if (S.route === 'timeline' && tlL().design === 'cards') drawRelsB(); }, 140); });
 
 async function init() {
   await loadWorkspace();
@@ -484,5 +484,6 @@ async function init() {
   if (S.route === 'map') S.panel = 'list';
   if (S.route === 'timeline') S.panel = 'none';
   render();
+  ensureGL().then(ok => { if (ok && document.querySelector('[data-map]')) drawMaps(); });
   Cloud.init();
 }

@@ -11,7 +11,7 @@ html=f'''<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.2.0/maplibre-gl.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <style>
 {css}</style>
 <!-- 선택: 같은 폴더의 config.js 에서 window.SIGONGGAN_CONFIG = {{ supabaseUrl, supabaseKey }} 를 정할 수 있어요. 없으면 무시돼요. -->

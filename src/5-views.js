@@ -129,7 +129,7 @@ function homeView() {
         <figure><div class="f">${imgEl({ id: 'h4', key: 'seoul' }, '서울 시가전')}</div><figcaption><b>1950.09.28 서울 수복</b>${esc(IMG.seoul.credit)}</figcaption></figure>
       </div></section>
     <section class="cta"><div class="cta-in"><h2>첫 사건부터 관측해 볼까요?</h2><button class="btn lite big" data-act="start-new">새 탐구 시작</button><button class="btn out-ink big" data-act="load-sample">예시 탐구 보기</button></div></section>
-    <footer class="foot">시공간 LAB · Time &amp; Space Exploration. 편집 화면의 지도는 OpenStreetMap 타일을 사용하고, 장소 검색은 OpenStreetMap Nominatim을 사용합니다. 홈의 장식 지도는 단순화한 해안선입니다. 사진은 모두 Wikimedia Commons의 퍼블릭 도메인 자료입니다.</footer>
+    <footer class="foot">시공간 LAB · Time &amp; Space Exploration. 지도는 OpenFreeMap(© OpenMapTiles, 지도 데이터 © OpenStreetMap 기여자)을, 장소 검색은 OpenStreetMap Nominatim을 사용합니다. 지도를 불러오지 못하면 단순화한 해안선 지도로 대신 보여 줍니다. 사진은 모두 Wikimedia Commons의 퍼블릭 도메인 자료입니다.</footer>
   </div>`;
 }
 function miniAxis(selId) {

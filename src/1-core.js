@@ -11,10 +11,12 @@ const CONFIG = Object.assign({
   supabaseUrl: '',
   supabaseKey: '',
   photoBucket: 'sigonggan-photos',
-  tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  tileAttribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> 기여자',
+  // 지도: OpenFreeMap (API 키·가입 없이 무료, 출처 표시 필수 · openfreemap.org)
+  mapStyle: 'https://tiles.openfreemap.org/styles/positron',
+  mapStyleDark: 'https://tiles.openfreemap.org/styles/dark',
+  mapAttribution: 'OpenFreeMap © OpenMapTiles · 지도 데이터 © OpenStreetMap 기여자',
   geocodeUrl: 'https://nominatim.openstreetmap.org/search',
-  leafletJs: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
+  maplibreJs: 'https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/5.2.0/maplibre-gl.min.js',
   supabaseJs: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
   html2canvasJs: 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   jspdfJs: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
@@ -165,7 +167,6 @@ function fitRegion(pts, minSpan = 1.2) {
    o.lines: [{ coords: [[lat, lon]...], color, dim, hl, dash }] */
 const MAPQ = {}; let mapSeq = 0;
 function mapSlot(opts, cls = 'mapbox') { const id = 'm' + (++mapSeq); MAPQ[id] = opts; return `<div class="${cls}" data-map="${id}"></div>`; }
-function drawMaps() { document.querySelectorAll('[data-map]').forEach(el => { const o = MAPQ[el.dataset.map]; if (o) drawMap(el, o); }); }
 function drawMap(el, o) {
   const W = el.clientWidth, H = el.clientHeight; if (!W || !H) return;
   const dark = o.theme === 'dark';

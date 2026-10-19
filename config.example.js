@@ -8,8 +8,8 @@
 window.SIGONGGAN_CONFIG = {
   supabaseUrl: 'https://YOUR-PROJECT-REF.supabase.co',
   supabaseKey: 'sb_publishable_xxxxxxxxxxxxxxxx'
-  // 선택: 지도 타일·장소 검색을 다른 서비스로 바꿀 때
-  // tileUrl: 'https://{s}.example.com/{z}/{x}/{y}.png',
-  // tileAttribution: '&copy; ...',
+  // 선택: 지도 스타일·장소 검색을 다른 서비스로 바꿀 때 (MapLibre 스타일 주소)
+  // mapStyle: 'https://tiles.openfreemap.org/styles/positron',
+  // mapStyleDark: 'https://tiles.openfreemap.org/styles/dark',
   // geocodeUrl: 'https://nominatim.openstreetmap.org/search',
 };

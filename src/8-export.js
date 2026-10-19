@@ -21,7 +21,7 @@ function exportDialog() {
         ${(o.scope !== 'tl' && !hasMap) ? '<small class="hint">지도에 핀이 없어요.</small>' : ''}${(o.scope !== 'map' && !hasTl) ? '<small class="hint">연표에 사건이 없어요.</small>' : ''}</div>
       ${pdf ? `<div class="field"><span class="lb">용지</span><div class="seg" style="width:max-content">${opt('paper', 'land', 'A4 가로')}${opt('paper', 'port', 'A4 세로')}</div></div>` : ''}
       <div class="field"><span class="lb">넣을 내용</span>${chk('desc', '설명 글')}${chk('photos', '사진과 사진 출처')}${chk('sources', '출처 목록')}</div>
-      <p class="muted" style="margin:0">연표는 지금 고른 <b>${design}</b>으로 그려요. ${pdf ? '쪽이 넘어갈 때 카드 사이에서만 나눠서 사진과 글자가 잘리지 않아요.' : ''} 지도는 실제 지도 타일로 그리고, 타일을 받지 못하면 해안선 지도로 대신해요.</p>
+      <p class="muted" style="margin:0">연표는 지금 고른 <b>${design}</b>으로 그려요. ${pdf ? '쪽이 넘어갈 때 카드 사이에서만 나눠서 사진과 글자가 잘리지 않아요.' : ''} 지도는 편집 화면과 같은 실제 지도로 그리고, 지도를 받지 못하면 해안선 지도로 대신해요.</p>
     </div>
     <div style="display:grid;gap:6px;align-content:start"><span class="lb" style="font-size:12px;font-weight:700;color:var(--ink-2)">미리보기</span><div class="sheet ${pdf && o.paper === 'port' ? 'port' : ''}"><span class="t">${esc((o.scope === 'tl' ? tlL() : mapL()).title)}</span><div class="m">${o.scope !== 'tl' ? mapSlot({ fs: 7, nolabel: true, scalebar: false, region: mapL().pins.length ? fitRegion(mapL().pins) : KOREA, pins: mapL().pins.map(p => ({ id: p.id, lat: p.lat, lon: p.lon, color: p.color })), lines: mapL().routes.filter(r => r.visible).map(r => ({ coords: r.pinIds.map(pinById).filter(Boolean).map(p => [p.lat, p.lon]), color: r.color })) }) : `<div style="position:absolute;inset:0;background:var(--paper)"><span style="position:absolute;left:8%;right:8%;top:30%;height:1.5px;background:var(--brass)"></span>${sorted().slice(0, 8).map((e, i) => `<span style="position:absolute;left:${8 + i * 11}%;top:38%;width:9%;height:40%;background:var(--ivory-2);border-radius:2px"></span>`).join('')}</div>`}</div><div class="l"><span style="position:absolute;left:0;right:0;top:7px;height:1.5px;background:var(--brass)"></span></div></div><span class="muted">${o.scope !== 'tl' ? `핀 ${mapL().pins.length} · 경로 ${mapL().routes.length}` : ''}${o.scope === 'both' ? ' · ' : ''}${o.scope !== 'map' ? `사건 ${tlL().events.length}` : ''}</span></div></div>
     ${status}</div>
@@ -37,7 +37,32 @@ function loadImg(src, timeout = 8000) {
   return new Promise(res => { const im = new Image(); let done = false; const fin = ok => { if (!done) { done = true; res(ok ? im : null); } }; im.crossOrigin = 'anonymous'; im.onload = () => fin(true); im.onerror = () => fin(false); setTimeout(() => fin(false), timeout); im.src = src; });
 }
 async function renderMapCanvas(w, h, scale = 2, onProgress) {
-  const L0 = mapL(), pins = L0.pins;
+  if (await ensureGL()) { try { const r = await renderMapCanvasGL(w, h, scale, onProgress); if (r) return r; } catch (e) { console.error(e); } }
+  return renderMapCanvasAtlas(w, h, scale);
+}
+/* 실제 지도(MapLibre)를 화면 밖에서 그려 캔버스로 옮긴 뒤, 경로·핀·축척을 덧그린다 */
+async function renderMapCanvasGL(w, h, scale, onProgress) {
+  const box = document.createElement('div'); box.style.cssText = `position:fixed;left:-20000px;top:0;width:${w}px;height:${h}px`; document.body.appendChild(box);
+  const map = glMap(box, { interactive: false, attribution: false, preserve: true, pixelRatio: scale, fade: false });
+  try {
+    await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('지도 데이터를 불러오지 못했어요')), 20000); map.once('load', () => { clearTimeout(t); res(); }); });
+    const pins = mapL().pins;
+    if (pins.length === 1) map.jumpTo({ center: [pins[0].lon, pins[0].lat], zoom: 10 });
+    else if (pins.length) map.fitBounds(boundsOf(pins), { padding: { top: 60, bottom: 70, left: 90, right: 90 }, duration: 0, maxZoom: 12 });
+    else map.fitBounds(regionBounds(KOREA), { duration: 0 });
+    onProgress && onProgress(0.4);
+    await new Promise(res => { const t = setTimeout(res, 15000); map.once('idle', () => { clearTimeout(t); res(); }); });
+    onProgress && onProgress(1);
+    const cv = document.createElement('canvas'); cv.width = Math.round(w * scale); cv.height = Math.round(h * scale);
+    const cx = cv.getContext('2d'); cx.drawImage(map.getCanvas(), 0, 0, cv.width, cv.height); cx.scale(scale, scale);
+    const c = map.getCenter(), kmpp = 40075016.686 * Math.cos(c.lat * Math.PI / 180) / (512 * Math.pow(2, map.getZoom())) / 1000;
+    drawMapOverlay(cx, w, h, (lat, lon) => { const p = map.project([lon, lat]); return [p.x, p.y]; }, kmpp, CONFIG.mapAttribution);
+    return { canvas: cv, tiles: 1 };
+  } finally { try { map.remove(); } catch (e) {} box.remove(); }
+}
+/* 지도 라이브러리를 못 쓸 때: 단순 해안선 지도 (웹 메르카토르) */
+function renderMapCanvasAtlas(w, h, scale = 2) {
+  const pins = mapL().pins;
   const cv = document.createElement('canvas'); cv.width = Math.round(w * scale); cv.height = Math.round(h * scale);
   const cx = cv.getContext('2d'); cx.scale(scale, scale);
   const pts = pins.length ? pins : [{ lat: KOREA.lat0, lon: KOREA.lon0 }, { lat: KOREA.lat1, lon: KOREA.lon1 }];
@@ -50,21 +75,13 @@ async function renderMapCanvas(w, h, scale = 2, onProgress) {
   cx.fillStyle = '#DCE3DF'; cx.fillRect(0, 0, w, h);
   cx.beginPath(); LAND.forEach(([lon, lat], i) => { const [x, y] = px(lat, lon); i ? cx.lineTo(x, y) : cx.moveTo(x, y); }); cx.closePath();
   cx.fillStyle = '#F8F5EE'; cx.fill(); cx.strokeStyle = '#9E9682'; cx.lineWidth = 1; cx.stroke();
-  // 타일
-  const n = Math.pow(2, z), tx0 = Math.floor(ox / 256), tx1 = Math.floor((ox + w) / 256), ty0 = Math.max(0, Math.floor(oy / 256)), ty1 = Math.min(n - 1, Math.floor((oy + h) / 256));
-  const jobs = [];
-  for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) jobs.push({ tx, ty });
-  let ok = 0;
-  if (jobs.length <= 120) {
-    let done = 0;
-    const imgs = await Promise.all(jobs.map(async j => { const url = CONFIG.tileUrl.replace('{z}', z).replace('{x}', ((j.tx % n) + n) % n).replace('{y}', j.ty).replace('{s}', 'a'); const im = await loadImg(url); done++; onProgress && onProgress(done / jobs.length); return { ...j, im }; }));
-    if ('filter' in cx) cx.filter = 'grayscale(.85) sepia(.18) saturate(.9) contrast(.92) brightness(1.04)';
-    imgs.forEach(({ tx, ty, im }) => { if (!im) return; try { cx.drawImage(im, tx * 256 - ox, ty * 256 - oy, 256, 256); ok++; } catch (e) {} });
-    if ('filter' in cx) cx.filter = 'none';
-  }
-  // 경로
-  const routes = L0.routes.filter(r => r.visible);
-  routes.forEach(r => {
+  const latC = (lat0 + lat1) / 2, kmpp = 40075016.686 * Math.cos(latC * Math.PI / 180) / Math.pow(2, z + 8) / 1000;
+  drawMapOverlay(cx, w, h, px, kmpp, '');
+  return { canvas: cv, tiles: 0 };
+}
+function drawMapOverlay(cx, w, h, px, kmpp, attribution) {
+  const L0 = mapL(), pins = L0.pins;
+  L0.routes.filter(r => r.visible).forEach(r => {
     const cs = r.pinIds.map(pinById).filter(Boolean).map(p => px(p.lat, p.lon)); if (cs.length < 2) return;
     const path = () => { cx.beginPath(); cs.forEach(([x, y], i) => i ? cx.lineTo(x, y) : cx.moveTo(x, y)); };
     cx.lineJoin = 'round'; cx.lineCap = 'round';
@@ -76,7 +93,6 @@ async function renderMapCanvas(w, h, scale = 2, onProgress) {
       cx.save(); cx.translate(mx, my); cx.rotate(a); cx.beginPath(); cx.moveTo(-4, -5); cx.lineTo(6, 0); cx.lineTo(-4, 5); cx.closePath(); cx.fillStyle = safeColor(r.color); cx.strokeStyle = '#F8F5EE'; cx.lineWidth = 1.5; cx.fill(); cx.stroke(); cx.restore();
     }
   });
-  // 핀
   const font = '"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif';
   const spots = new Map(); pins.forEach(p => { const k = spotKey(p); if (!spots.has(k)) spots.set(k, []); spots.get(k).push(p); });
   spots.forEach(g => {
@@ -88,8 +104,6 @@ async function renderMapCanvas(w, h, scale = 2, onProgress) {
     const lx = p.left ? x - (g.length > 1 ? 16 : 12) : x + (g.length > 1 ? 16 : 12);
     cx.lineWidth = 4; cx.strokeStyle = 'rgba(248,245,238,.95)'; cx.strokeText(label, lx, y); cx.fillStyle = '#14232D'; cx.fillText(label, lx, y);
   });
-  // 축척 · 방위 · 저작권
-  const latC = ((lat0 + lat1) / 2), mpp = 40075016.686 * Math.cos(latC * Math.PI / 180) / Math.pow(2, z + 8), kmpp = mpp / 1000;
   const nice = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000], km = nice.filter(k => k / kmpp <= 120).pop() || 0.05, bw = km / kmpp;
   cx.textAlign = 'left'; cx.textBaseline = 'alphabetic';
   cx.fillStyle = 'rgba(251,249,244,.92)'; cx.fillRect(10, h - 44, bw + 70, 34);
@@ -97,8 +111,7 @@ async function renderMapCanvas(w, h, scale = 2, onProgress) {
   cx.font = `700 10px ${font}`; cx.fillText('N', 20.5, h - 13);
   cx.strokeStyle = '#14232D'; cx.lineWidth = 1; cx.strokeRect(44, h - 34, bw, 6); cx.fillRect(44, h - 34, bw / 2, 6);
   cx.font = `500 10px ${font}`; cx.fillText(km < 1 ? `${km * 1000} m` : `${km} km`, 44 + bw - 22, h - 14); cx.fillText('0', 42, h - 14);
-  if (ok) { cx.font = `500 9.5px ${font}`; cx.textAlign = 'right'; const t = '© OpenStreetMap 기여자'; const tw = cx.measureText(t).width; cx.fillStyle = 'rgba(251,249,244,.85)'; cx.fillRect(w - tw - 12, h - 16, tw + 10, 14); cx.fillStyle = '#5B676D'; cx.fillText(t, w - 6, h - 5); }
-  return { canvas: cv, tiles: ok };
+  if (attribution) { cx.font = `500 9.5px ${font}`; cx.textAlign = 'right'; const tw = cx.measureText(attribution).width; cx.fillStyle = 'rgba(251,249,244,.88)'; cx.fillRect(w - tw - 12, h - 16, tw + 10, 14); cx.fillStyle = '#5B676D'; cx.fillText(attribution, w - 6, h - 5); }
 }
 
 const Exporter = {
@@ -139,7 +152,7 @@ const Exporter = {
         const mw = refW - 40, mh = Math.round(mw * (pdf && !land ? 0.9 : 0.6));
         const { canvas, tiles } = await renderMapCanvas(mw, mh, 2, f => this.step(`지도 타일을 받는 중… ${Math.round(f * 100)}%`, 10 + f * 25));
         const L0 = mapL();
-        add(`<img class="xmap" alt="" src="${canvas.toDataURL('image/png')}">${tiles ? '' : '<p style="font-size:11px;color:var(--ink-3);margin:6px 0 0">지도 타일을 받지 못해 해안선 지도로 그렸어요.</p>'}`);
+        add(`<img class="xmap" alt="" src="${canvas.toDataURL('image/png')}">${tiles ? '' : '<p style="font-size:11px;color:var(--ink-3);margin:6px 0 0">실제 지도를 받지 못해 해안선 지도로 그렸어요.</p>'}`);
         if (L0.routes.length) add(`<div style="display:grid;gap:6px"><b style="font-size:13px">경로</b>${L0.routes.map(r => `<div style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px"><span class="rline" style="--rc:${r.color};margin-top:7px;${r.visible ? '' : 'opacity:.3'}"></span><span><b>${esc(r.name)}</b>${r.visible ? '' : ' (지도에서 숨김)'} · ${esc(r.pinIds.map(pinById).filter(Boolean).map(pinLabel).join(' → '))}${o.desc && r.desc ? `<br><span style="color:var(--ink-2)">${esc(r.desc)}</span>` : ''}</span></div>`).join('')}</div>`);
         if (o.desc || o.photos) {
           await this.preloadPhotos(L0.pins);
@@ -176,7 +189,7 @@ const Exporter = {
         const rows = [];
         if (wantMap) mapL().pins.forEach(p => { if (p.src) rows.push(`${esc(pinLabel(p))}: ${esc(p.src)}`); if (o.photos && p.photo && !p.photo.key && (p.photo.credit || p.photo.caption)) rows.push(`${esc(pinLabel(p))} 사진: ${esc(creditOf(p.photo))}`); });
         if (wantTl) sorted().forEach(e => { if (e.src) rows.push(`${esc(e.t)}: ${esc(e.src)}`); if (o.photos && e.photo) rows.push(`${esc(e.t)} 사진: ${esc(creditOf(e.photo))}`); });
-        if (wantMap && mapL().pins.length) rows.push('지도 바탕: © OpenStreetMap 기여자 (openstreetmap.org/copyright)');
+        if (wantMap && mapL().pins.length) rows.push('지도 바탕: OpenFreeMap © OpenMapTiles · 지도 데이터 © OpenStreetMap 기여자');
         if (rows.length) add(`<div class="xsrc"><b style="font-size:14px">출처</b><ol>${[...new Set(rows)].map(r => `<li>${r}</li>`).join('')}</ol></div>`);
       }
       const style = document.createElement('style');
