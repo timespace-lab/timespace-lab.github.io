@@ -45,7 +45,7 @@ async function renderMapCanvasGL(w, h, scale, onProgress) {
   const box = document.createElement('div'); box.style.cssText = `position:fixed;left:-20000px;top:0;width:${w}px;height:${h}px`; document.body.appendChild(box);
   const map = glMap(box, { interactive: false, attribution: false, preserve: true, pixelRatio: scale, fade: false });
   try {
-    await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('지도 데이터를 불러오지 못했어요')), 20000); map.once('load', () => { clearTimeout(t); res(); }); });
+    await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('지도 데이터를 불러오지 못했어요')), 20000); map.once('style.load', () => { clearTimeout(t); res(); }); });
     const pins = mapL().pins;
     if (pins.length === 1) map.jumpTo({ center: [pins[0].lon, pins[0].lat], zoom: 10 });
     else if (pins.length) map.fitBounds(boundsOf(pins), { padding: { top: 60, bottom: 70, left: 90, right: 90 }, duration: 0, maxZoom: 12 });

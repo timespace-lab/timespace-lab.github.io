@@ -94,8 +94,9 @@ function initGL() {
   MV.map = map; MV.mode = 'gl'; MV.styleReady = false;
   let loaded = false;
   const giveUp = setTimeout(() => { if (!loaded) fallbackToAtlas('지도 데이터를 불러오지 못했어요'); }, 15000);
-  map.on('load', () => {
-    loaded = true; clearTimeout(giveUp);
+  // 'load'는 첫 화면을 다 그려야 오므로(창이 가려지면 멈춤) 스타일을 받은 시점을 준비 완료로 본다
+  map.on('style.load', () => {
+    if (loaded) return; loaded = true; clearTimeout(giveUp);
     addRouteLayers(map); MV.styleReady = true;
     if (MV.el.parentElement === document.body) { MV.el.style.cssText = ''; MV.el.remove(); }
     if (S.route === 'map') { const h = document.getElementById('mapmount'); if (h && MV.el.parentElement !== h) { h.innerHTML = ''; h.appendChild(MV.el); } map.resize(); updateMap(); fitToContent(true); updateMapNote(); }
@@ -267,7 +268,7 @@ function makeStatic(theme) {
     const el = document.createElement('div'); el.className = 'smap';
     const map = glMap(el, { dark: theme === 'dark', interactive: false });
     const ent = { el, map, theme, ready: false, markers: [], opts: null };
-    map.on('load', () => { ent.ready = true; addRouteLayers(map); applyStatic(ent); });
+    map.on('style.load', () => { if (ent.ready) return; ent.ready = true; addRouteLayers(map); applyStatic(ent); });
     map.on('error', e => { if (!ent.ready && theme === 'dark' && !ent.retried && e && e.error) { ent.retried = true; map.setStyle(CONFIG.mapStyle); el.classList.add('darkened'); } });
     return ent;
   } catch (e) { return null; }

@@ -1272,8 +1272,9 @@ function initGL() {
   MV.map = map; MV.mode = 'gl'; MV.styleReady = false;
   let loaded = false;
   const giveUp = setTimeout(() => { if (!loaded) fallbackToAtlas('지도 데이터를 불러오지 못했어요'); }, 15000);
-  map.on('load', () => {
-    loaded = true; clearTimeout(giveUp);
+  // 'load'는 첫 화면을 다 그려야 오므로(창이 가려지면 멈춤) 스타일을 받은 시점을 준비 완료로 본다
+  map.on('style.load', () => {
+    if (loaded) return; loaded = true; clearTimeout(giveUp);
     addRouteLayers(map); MV.styleReady = true;
     if (MV.el.parentElement === document.body) { MV.el.style.cssText = ''; MV.el.remove(); }
     if (S.route === 'map') { const h = document.getElementById('mapmount'); if (h && MV.el.parentElement !== h) { h.innerHTML = ''; h.appendChild(MV.el); } map.resize(); updateMap(); fitToContent(true); updateMapNote(); }
@@ -1445,7 +1446,7 @@ function makeStatic(theme) {
     const el = document.createElement('div'); el.className = 'smap';
     const map = glMap(el, { dark: theme === 'dark', interactive: false });
     const ent = { el, map, theme, ready: false, markers: [], opts: null };
-    map.on('load', () => { ent.ready = true; addRouteLayers(map); applyStatic(ent); });
+    map.on('style.load', () => { if (ent.ready) return; ent.ready = true; addRouteLayers(map); applyStatic(ent); });
     map.on('error', e => { if (!ent.ready && theme === 'dark' && !ent.retried && e && e.error) { ent.retried = true; map.setStyle(CONFIG.mapStyle); el.classList.add('darkened'); } });
     return ent;
   } catch (e) { return null; }
@@ -2946,7 +2947,7 @@ async function renderMapCanvasGL(w, h, scale, onProgress) {
   const box = document.createElement('div'); box.style.cssText = `position:fixed;left:-20000px;top:0;width:${w}px;height:${h}px`; document.body.appendChild(box);
   const map = glMap(box, { interactive: false, attribution: false, preserve: true, pixelRatio: scale, fade: false });
   try {
-    await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('지도 데이터를 불러오지 못했어요')), 20000); map.once('load', () => { clearTimeout(t); res(); }); });
+    await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('지도 데이터를 불러오지 못했어요')), 20000); map.once('style.load', () => { clearTimeout(t); res(); }); });
     const pins = mapL().pins;
     if (pins.length === 1) map.jumpTo({ center: [pins[0].lon, pins[0].lat], zoom: 10 });
     else if (pins.length) map.fitBounds(boundsOf(pins), { padding: { top: 60, bottom: 70, left: 90, right: 90 }, duration: 0, maxZoom: 12 });
