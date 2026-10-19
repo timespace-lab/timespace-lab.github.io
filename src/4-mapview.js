@@ -49,6 +49,8 @@ function glMap(container, opts = {}) {
   if (map.touchZoomRotate) map.touchZoomRotate.disableRotation();
   if (map.keyboard && map.keyboard.disableRotation) map.keyboard.disableRotation();
   map.on('style.load', () => koreanize(map));
+  // 출처 표시는 접힌 상태(ⓘ)로 시작해 지도를 가리지 않게 한다 (누르면 펼쳐짐)
+  map.once('load', () => { const a = container.querySelector('.maplibregl-ctrl-attrib'); if (a) { a.classList.remove('maplibregl-compact-show'); a.removeAttribute('open'); } });
   return map;
 }
 function addRouteLayers(map) {

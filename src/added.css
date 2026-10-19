@@ -54,7 +54,7 @@
 .maplibregl-ctrl-attrib { background: rgba(251,249,244,.85); color: var(--ink-3); font-size: 10.5px; padding: 0 6px; border-radius: 3px 0 0 0; }
 .maplibregl-ctrl-attrib a { color: var(--teal-ink); text-decoration: none; }
 .mv .maplibregl-ctrl-bottom-right { right: 0; bottom: 0; }
-.smap { position: absolute; inset: 0; }
+.mv.maplibregl-map, .smap, .smap.maplibregl-map { position: absolute; inset: 0; }
 .smap .maplibregl-ctrl-attrib { font-size: 9px; }
 .smap.darkened .maplibregl-canvas { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.9) saturate(.6); }
 .lp.small { width: 24px; height: 24px; }
