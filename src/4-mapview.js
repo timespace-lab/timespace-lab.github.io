@@ -34,6 +34,8 @@ function koreanize(map) {
       if (l.type !== 'symbol' || !l.layout || !l.layout['text-field']) return;
       if (!/name/.test(JSON.stringify(l.layout['text-field']))) return;
       map.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:ko'], ['get', 'name:latin'], ['get', 'name']]);
+      // 핀 이름이 먼저 보이도록 바탕 지도 글자는 조금 흐리게
+      map.setPaintProperty(l.id, 'text-opacity', 0.62);
     });
   } catch (e) {}
 }
@@ -60,6 +62,17 @@ function addRouteLayers(map) {
   map.addLayer({ id: 'sg-route-line', type: 'line', source: 'sg-routes', filter: ['!=', ['get', 'dash'], true], layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['get', 'w'], 'line-opacity': ['get', 'op'] } });
   map.addLayer({ id: 'sg-route-dash', type: 'line', source: 'sg-routes', filter: ['==', ['get', 'dash'], true], layout: { 'line-join': 'round' }, paint: { 'line-color': ['get', 'color'], 'line-width': ['get', 'w'], 'line-dasharray': [1.6, 1.4] } });
 }
+/* 보이지 않는 글자 레이어로 핀과 핀 이름 자리를 차지해, 그 자리에 겹치는 바탕 지도 지명은 지도가 스스로 숨기게 한다 */
+function basemapFont(map) { const l = (map.getStyle().layers || []).find(x => x.type === 'symbol' && x.layout && x.layout['text-font']); return l ? l.layout['text-font'] : ['Noto Sans Regular']; }
+function addPinSpace(map) {
+  if (map.getSource('sg-pins')) return;
+  map.addSource('sg-pins', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'sg-pin-space', type: 'symbol', source: 'sg-pins', layout: { 'text-field': ['get', 't'], 'text-font': basemapFont(map), 'text-size': 13, 'text-anchor': ['get', 'a'], 'text-offset': ['get', 'o'], 'text-allow-overlap': true, 'text-ignore-placement': false, 'text-padding': 4 }, paint: { 'text-opacity': 0 } });
+}
+function pinSpaceGeo(pins) {
+  return { type: 'FeatureCollection', features: pins.map(p => ({ type: 'Feature', properties: { t: '\u3000' + (p.label || '\u3000'), a: p.left ? 'right' : 'left', o: p.left ? [0.9, 0] : [-0.9, 0] }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } })) };
+}
+function setPinSpace(map, pins) { const src = map.getSource('sg-pins'); if (src) src.setData(pinSpaceGeo(pins)); }
 function routeGeo(lines) {
   return { type: 'FeatureCollection', features: lines.filter(l => l.coords.length > 1).map(l => ({ type: 'Feature', properties: { id: l.id || '', color: safeColor(l.color), w: l.hl ? 6 : (l.w || 4.5), op: l.dim ? 0.3 : 1, dash: !!l.dash }, geometry: { type: 'LineString', coordinates: l.coords.map(c => [c[1], c[0]]) } })) };
 }
@@ -99,7 +112,7 @@ function initGL() {
   // 'load'는 첫 화면을 다 그려야 오므로(창이 가려지면 멈춤) 스타일을 받은 시점을 준비 완료로 본다
   map.on('style.load', () => {
     if (loaded) return; loaded = true; clearTimeout(giveUp);
-    addRouteLayers(map); MV.styleReady = true;
+    addRouteLayers(map); addPinSpace(map); MV.styleReady = true;
     if (MV.el.parentElement === document.body) { MV.el.style.cssText = ''; MV.el.remove(); }
     if (S.route === 'map') { const h = document.getElementById('mapmount'); if (h && MV.el.parentElement !== h) { h.innerHTML = ''; h.appendChild(MV.el); } map.resize(); updateMap(); fitToContent(true); updateMapNote(); }
   });
@@ -201,6 +214,7 @@ function updateMap() {
   const D = mapDecor(); lastDecor = D;
   MV.el.classList.toggle('picking', !!S.mapMode && S.mapMode !== 'route');
   map.getSource('sg-routes').setData(routeGeo(D.lines));
+  setPinSpace(map, D.temp ? [...D.pins, D.temp] : D.pins);
   MV.markers.forEach(m => m.remove()); MV.markers = [];
   if (D.ghost) addHtmlMarker(map, MV.markers, D.ghost.lat, D.ghost.lon, pinHtml({ ...D.ghost, ghost: true, color: '#B6975A' }));
   D.pins.forEach(p => addHtmlMarker(map, MV.markers, p.lat, p.lon, pinHtml(p), { interactive: true, title: p.title, z: p.sel ? 5 : 1, onClick: () => onPinClick(p.ids) }));
@@ -270,7 +284,7 @@ function makeStatic(theme) {
     const el = document.createElement('div'); el.className = 'smap';
     const map = glMap(el, { dark: theme === 'dark', interactive: false });
     const ent = { el, map, theme, ready: false, markers: [], opts: null };
-    map.on('style.load', () => { if (ent.ready) return; ent.ready = true; addRouteLayers(map); applyStatic(ent); });
+    map.on('style.load', () => { if (ent.ready) return; ent.ready = true; addRouteLayers(map); addPinSpace(map); applyStatic(ent); });
     map.on('error', e => { if (!ent.ready && theme === 'dark' && !ent.retried && e && e.error) { ent.retried = true; map.setStyle(CONFIG.mapStyle); el.classList.add('darkened'); } });
     return ent;
   } catch (e) { return null; }
@@ -285,7 +299,7 @@ function applyStatic(ent) {
   if (o.center) map.setCenter([o.center.lon, o.center.lat]);
   ent.markers.forEach(m => m.remove()); ent.markers = [];
   (o.pins || []).forEach(p => addHtmlMarker(map, ent.markers, p.lat, p.lon, pinHtml({ ...p, label: o.nolabel ? '' : p.label }, `small${o.theme === 'dark' ? ' dk' : ''}`)));
-  if (ent.ready) { const src = map.getSource('sg-routes'); if (src) src.setData(routeGeo((o.lines || []).map(l => ({ ...l, w: 3.5 })))); }
+  if (ent.ready) { const src = map.getSource('sg-routes'); if (src) src.setData(routeGeo((o.lines || []).map(l => ({ ...l, w: 3.5 })))); setPinSpace(map, o.nolabel ? (o.pins || []).map(p => ({ ...p, label: '' })) : (o.pins || [])); }
 }
 
 /* ---------- 아틀라스 대체 지도 ---------- */

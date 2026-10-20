@@ -47,6 +47,9 @@ async function renderMapCanvasGL(w, h, scale, onProgress) {
   try {
     await new Promise((res, rej) => { const t = setTimeout(() => rej(new Error('지도 데이터를 불러오지 못했어요')), 20000); map.once('style.load', () => { clearTimeout(t); res(); }); });
     const pins = mapL().pins;
+    addPinSpace(map);
+    const spots = new Map(); pins.forEach(p => { const k = spotKey(p); if (!spots.has(k)) spots.set(k, []); spots.get(k).push(p); });
+    setPinSpace(map, [...spots.values()].map(g => ({ lat: g[0].lat, lon: g[0].lon, left: g[0].left, label: g.length > 1 ? `${pinLabel(g[0])} 외 ${g.length - 1}` : pinLabel(g[0]) })));
     if (pins.length === 1) map.jumpTo({ center: [pins[0].lon, pins[0].lat], zoom: 10 });
     else if (pins.length) map.fitBounds(boundsOf(pins), { padding: { top: 60, bottom: 70, left: 90, right: 90 }, duration: 0, maxZoom: 12 });
     else map.fitBounds(regionBounds(KOREA), { duration: 0 });
